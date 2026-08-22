@@ -1,8 +1,19 @@
 # AstraDeployment
 
-**AstraDeployment Portable Local Deployment 1.0** is the reproducible single-node deployment product for AstraVector.
+**AstraDeployment Portable Local Deployment 1.0** is the finalized, reproducible single-node deployment baseline for AstraVector on the currently validated `linux/arm64` environment.
 
 Version 1.0 packages the runtime environment around an already-built AstraVector OCI image. It does not build AstraVector from source and does not include AstraIndexator yet.
+
+## Finalized status
+
+```text
+ASTRADEPLOYMENT_PORTABLE_LOCAL_1_0_FINALIZED
+```
+
+Finalization record:
+
+- `docs/ASTRADEPLOYMENT_PORTABLE_LOCAL_1_0_FINALIZATION.md` — frozen baseline, validated identities, accepted limitations and change-control policy.
+- `docs/ASTRADEPLOYMENT_MAC_LOCAL_REVALIDATION_RESULT.md` — latest full Mac Apple Silicon revalidation; verdict `ASTRADEPLOYMENT_MAC_LOCAL_REVALIDATION_PASS`.
 
 ## Included
 
@@ -33,9 +44,10 @@ cp .env.example .env
 # edit .env and provide secrets
 
 docker login registry.astrabase.asia -u astra-reader
-./scripts/start.sh
-./scripts/health.sh
-./scripts/smoke.sh
+make preflight
+make start
+make health
+make smoke
 ```
 
 Read `deploy/local/README.md` before the first installation.
@@ -45,14 +57,17 @@ Read `deploy/local/README.md` before the first installation.
 ### Architecture and validation
 
 - `docs/ASTRADEPLOYMENT_PORTABLE_LOCAL_1_0_SPEC.md` — architecture and acceptance contract.
-- `docs/ASTRADEPLOYMENT_PORTABLE_LOCAL_1_0_VALIDATION_RESULT.md` — validated deployment evidence.
+- `docs/ASTRADEPLOYMENT_PORTABLE_LOCAL_1_0_VALIDATION_RESULT.md` — original validated deployment evidence.
+- `docs/ASTRADEPLOYMENT_MAC_LOCAL_REVALIDATION_RESULT.md` — repeated local Mac validation evidence.
+- `docs/ASTRADEPLOYMENT_PORTABLE_LOCAL_1_0_FINALIZATION.md` — final frozen release baseline and change-control rules.
+- `docs/architecture/PLATFORM_SERVICE_INTERACTIONS.md` — Spring Boot, Python AstraIndexator and AstraVector interaction model.
 
 ### Integration contract governance
 
 - `docs/integration/CONTRACT_GOVERNANCE.md` — source-of-truth hierarchy, contract versioning, compatibility and known gaps.
 - `docs/integration/ASTRAVECTOR_RUNTIME_CONTRACT_REFERENCE.md` — runtime ports, health, model/bootstrap and public service reference.
 - `docs/integration/EXTERNAL_DTO_REFERENCE.md` — consumer DTO catalogue for Spring retrieval and AstraIndexator ingestion.
-- `docs/integration/ACCESS_ZONE_AND_TTL_SEMANTICS.md` — authoritative consumer guidance for `accessZoneId(s)`, `accessZoneCode(s)`, `callerAccessLevel` and TTL semantics.
+- `docs/integration/ACCESS_ZONE_AND_TTL_SEMANTICS.md` — consumer guidance for `accessZoneId(s)`, `accessZoneCode(s)`, `callerAccessLevel` and TTL semantics.
 
 ### Spring Boot retrieval
 
@@ -62,7 +77,7 @@ Read `deploy/local/README.md` before the first installation.
 
 ### Future AstraIndexator ingestion
 
-- `docs/integration/ASTRAINDEXATOR_INTEGRATION_CONTRACT.md` — future AstraIndexator → AstraVector responsibility and lifecycle contract.
+- `docs/integration/ASTRAINDEXATOR_INTEGRATION_CONTRACT.md` — future Python AstraIndexator → AstraVector responsibility and lifecycle contract.
 - `docs/integration/ASTRAINDEXATOR_PROTO_MAPPING.md` — detailed application-to-generated-protobuf mapping and validation rules.
 - `docs/integration/INGESTION_SESSION_STATE_MACHINE.md` — Start/Append/Finalize/Abort/Status state machine and retry/recovery behavior.
 
@@ -82,30 +97,29 @@ Start here when installing or operating the platform:
 ## External contract model
 
 ```text
-                         Astra Platform Contract
-                                  |
-              +-------------------+-------------------+
-              |                                       |
-       Retrieval Contract                       Ingestion Contract
-              |                                       |
-        HTTP / JSON                              Protobuf / gRPC
-              |                                       |
-       Spring Boot apps                           AstraIndexator
-              |                                       |
-              +-------------------+-------------------+
-                                  v
-                             AstraVector
-                                  |
-                         +--------+--------+
-                         |                 |
-                    PostgreSQL          Qdrant
-                  source of truth   rebuildable projection
+External clients / UI
+        |
+        v
+Spring Boot application/API layer
+   |                       |
+   | retrieval             | upload/indexing orchestration
+   v                       v
+AstraVector HTTP      Python AstraIndexator
+/api/v1/retrieve             |
+                              | gRPC ingestion
+                              v
+                         AstraVector
+                              |
+                     +--------+--------+
+                     |                 |
+                PostgreSQL          Qdrant
+              source of truth   rebuildable projection
 ```
 
 Contract source-of-truth hierarchy:
 
 ```text
-llm2/proto + server semantics
+llm2/proto + actual AstraVector server semantics
         ↓
 AstraDeployment consumer documentation
         ↓
@@ -129,13 +143,47 @@ AstraDeployment 1.0
 
 AstraIndexator, Kubernetes and Helm remain future milestones; their integration/deployment contracts are documented without claiming they are already implemented.
 
-## Important contract gaps before AstraIndexator production implementation
+## Validated baseline
 
-The current AstraVector API is sufficiently mature to design clients, but several cross-service details are being formally stabilized in `llm2` before multiple independent ingestion clients rely on them:
+```text
+AstraVector image:
+registry.astrabase.asia/astravector:sha-1cb6065
 
-- byte-precise `batch_content_hash` canonicalization + golden vectors;
-- byte-precise `final_content_hash` canonicalization + golden vectors;
-- typed ingestion-session state/error reasons;
-- explicitly versioned session activation semantics.
+Digest:
+sha256:b0567810b5ea3df752ff8ba559fcf16bc46b245878e798b8888dcf93426ee6ad
 
-These are documented as gaps rather than silently reverse-engineered into client code.
+Validated architecture:
+linux/arm64
+```
+
+The Mac revalidation passed all documented G1-G15 gates, including real ingestion, activation, retrieval, restart/persistence and cleanup preservation.
+
+The validated retrieval timeout baseline includes:
+
+```text
+ASTRAVECTOR_SINGLE_QUERY_DEADLINE_MS=3000
+ASTRAVECTOR_GRPC_QUERY_DEADLINE_MS=3000
+```
+
+## Known accepted limitations
+
+- AstraVector graceful shutdown can still end with `ExitCode=137`, `OOMKilled=false`; restart/persistence/repeated smoke pass.
+- Cold Nexus delivery of the large `model.onnx_data` artifact is not the 1.0 release gate; the verified warm/preloaded model cache is the validated path.
+- The current AstraVector image is validated only on `arm64`.
+
+## Ingestion contract stabilization
+
+AstraVector ingestion is usable for client design, while FIX493 in `llm2` is intended to make the cross-language session contract safer by formally stabilizing:
+
+- byte-precise `batch_content_hash` canonicalization and golden vectors;
+- byte-precise `final_content_hash` canonicalization and golden vectors;
+- typed ingestion session states;
+- typed ingestion error reasons.
+
+AstraIndexator may be developed against the documented architecture now, but production code for those four details should follow the final AstraVector contract rather than duplicating internal Rust behavior.
+
+## Change control
+
+Version 1.0 is treated as a frozen validated baseline. Do not silently replace validated image identities, model hashes, persistence topology, runtime timeouts or external contract semantics.
+
+Any material change requires a new validation cycle and an explicit documentation update. See `docs/ASTRADEPLOYMENT_PORTABLE_LOCAL_1_0_FINALIZATION.md`.
