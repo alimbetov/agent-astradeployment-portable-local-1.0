@@ -1,0 +1,96 @@
+name: astradeployment
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:pg16}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-astravector}
+      POSTGRES_USER: ${POSTGRES_USER:-astravector_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-astravector_app} -d ${POSTGRES_DB:-astravector}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    networks:
+      - astra
+
+  qdrant:
+    image: ${QDRANT_IMAGE:-qdrant/qdrant:v1.14.1}
+    restart: unless-stopped
+    volumes:
+      - qdrant-data:/qdrant/storage
+    ports:
+      - "127.0.0.1:${QDRANT_HTTP_PORT:-6333}:6333"
+    networks:
+      - astra
+
+  astravector:
+    image: ${ASTRAVECTOR_IMAGE:-registry.astrabase.asia/astravector:sha-1cb6065}
+    restart: unless-stopped
+    stop_grace_period: ${ASTRAVECTOR_STOP_GRACE_PERIOD:-90s}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    environment:
+      ASTRAVECTOR_ENV: ${ASTRAVECTOR_ENV:-development}
+      ASTRAVECTOR_DB_URL: ${ASTRAVECTOR_DB_URL:?ASTRAVECTOR_DB_URL is required}
+      DATABASE_URL: ${ASTRAVECTOR_DB_URL:?ASTRAVECTOR_DB_URL is required}
+      ASTRAVECTOR_QDRANT_URL: ${ASTRAVECTOR_QDRANT_URL:-http://qdrant:6333}
+      ASTRAVECTOR_QDRANT_COLLECTION: ${ASTRAVECTOR_QDRANT_COLLECTION:-astravector_v004}
+      ASTRAVECTOR_QDRANT_ENABLED: "true"
+      ASTRAVECTOR_QDRANT_AUTO_CREATE_COLLECTION: "true"
+      ASTRAVECTOR_QDRANT_VALIDATE_SCHEMA: "true"
+      ASTRAVECTOR_QDRANT_ENSURE_PAYLOAD_INDEXES: "true"
+
+      ASTRAVECTOR_NEXUS_USERNAME: ${ASTRAVECTOR_NEXUS_USERNAME:-astra-reader}
+      ASTRAVECTOR_NEXUS_PASSWORD: ${ASTRAVECTOR_NEXUS_PASSWORD:?ASTRAVECTOR_NEXUS_PASSWORD is required}
+      ASTRAVECTOR_MODEL_REPOSITORY_URL: ${ASTRAVECTOR_MODEL_REPOSITORY_URL:-https://nexus.astrabase.asia/repository/astra-models/astravector/bge-m3/baseline-v1}
+      ASTRAVECTOR_MODEL_DIR: /models/bge-m3
+      ASTRAVECTOR_MODEL_PATH: /models/bge-m3/model.onnx
+      ASTRAVECTOR_TOKENIZER_PATH: /models/bge-m3/tokenizer.json
+      ASTRAVECTOR_MODEL_SHA256: ${ASTRAVECTOR_MODEL_SHA256:-f84251230831afb359ab26d9fd37d5936d4d9bb5d1d5410e66442f630f24435b}
+      ASTRAVECTOR_MODEL_DATA_SHA256: ${ASTRAVECTOR_MODEL_DATA_SHA256:-1eebfb28493f67bba03ce0ef64bfdc7fc5a3bd9d7493f818bb1d78cd798416b4}
+      ASTRAVECTOR_TOKENIZER_SHA256: ${ASTRAVECTOR_TOKENIZER_SHA256:-21106b6d7dab2952c1d496fb21d5dc9db75c28ed361a05f5020bbba27810dd08}
+
+      ASTRAVECTOR_SPARSE_REQUIRED: ${ASTRAVECTOR_SPARSE_REQUIRED:-false}
+      ASTRAVECTOR_AUTH_ENABLED: ${ASTRAVECTOR_AUTH_ENABLED:-false}
+      ASTRAVECTOR_ACCESS_ZONE_REGISTRY_AUTO_CREATE_ON_INGESTION: ${ASTRAVECTOR_ACCESS_ZONE_REGISTRY_AUTO_CREATE_ON_INGESTION:-true}
+      ASTRAVECTOR_ACCESS_ZONE_REGISTRY_AUTO_CREATE_ON_SEARCH: ${ASTRAVECTOR_ACCESS_ZONE_REGISTRY_AUTO_CREATE_ON_SEARCH:-false}
+      ASTRAVECTOR_HTTP_ENABLED: "true"
+      ASTRAVECTOR_HTTP_HOST: 0.0.0.0
+      ASTRAVECTOR_HTTP_PORT: 8080
+      RUST_LOG: ${RUST_LOG:-info}
+    volumes:
+      - model-cache:/models/bge-m3
+    ports:
+      - "127.0.0.1:${ASTRAVECTOR_GRPC_PORT:-50051}:50051"
+      - "127.0.0.1:${ASTRAVECTOR_HTTP_PORT:-8080}:8080"
+      - "127.0.0.1:${ASTRAVECTOR_METRICS_PORT:-9090}:9090"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+    networks:
+      - astra
+
+networks:
+  astra:
+    name: astradeployment-network
+    driver: bridge
+
+volumes:
+  postgres-data:
+    name: astradeployment-postgres-data
+  qdrant-data:
+    name: astradeployment-qdrant-data
+  model-cache:
+    name: astradeployment-model-cache
