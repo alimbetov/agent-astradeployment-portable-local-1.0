@@ -2,7 +2,7 @@
 set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
-"${SCRIPT_DIR}/preflight.sh"
+bash "${SCRIPT_DIR}/preflight.sh"
 
 image="$(env_value ASTRAVECTOR_IMAGE)"
 expected="$(env_value ASTRAVECTOR_EXPECTED_DIGEST)"
@@ -22,6 +22,6 @@ docker image inspect "$image" --format 'AstraVector image: ARCH={{.Architecture}
 echo "Starting AstraDeployment..."
 compose up -d
 
-"${SCRIPT_DIR}/health.sh" --wait "${ASTRADEPLOYMENT_START_TIMEOUT_SECONDS:-600}"
+bash "${SCRIPT_DIR}/health.sh" --wait "${ASTRADEPLOYMENT_START_TIMEOUT_SECONDS:-600}"
 
 echo "ASTRADEPLOYMENT_START_PASS"

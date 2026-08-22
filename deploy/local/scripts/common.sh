@@ -40,5 +40,5 @@ helper_curl() {
 }
 
 helper_grpcurl() {
-  docker run --rm --network "${NETWORK_NAME}" fullstorydev/grpcurl:v1.9.3 "$@"
+  docker run --rm -i --network "${NETWORK_NAME}" fullstorydev/grpcurl:v1.9.3 "$@"
 }

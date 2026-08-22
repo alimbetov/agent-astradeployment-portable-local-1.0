@@ -1,6 +1,15 @@
 name: astradeployment
 
 services:
+  model-cache-init:
+    image: ${MODEL_CACHE_INIT_IMAGE:-alpine:3.20}
+    restart: "no"
+    command: ["sh", "-c", "mkdir -p /models/bge-m3 && chown -R ${ASTRAVECTOR_UID:-10001}:${ASTRAVECTOR_GID:-10001} /models/bge-m3"]
+    volumes:
+      - model-cache:/models/bge-m3
+    networks:
+      - astra
+
   postgres:
     image: ${POSTGRES_IMAGE:-pgvector/pgvector:pg16}
     restart: unless-stopped
@@ -34,6 +43,8 @@ services:
     restart: unless-stopped
     stop_grace_period: ${ASTRAVECTOR_STOP_GRACE_PERIOD:-90s}
     depends_on:
+      model-cache-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       qdrant:
