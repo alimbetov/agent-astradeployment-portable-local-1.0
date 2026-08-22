@@ -15,6 +15,7 @@ Version 1.0 packages the runtime environment around an already-built AstraVector
 - health and functional smoke scripts
 - persistence/recovery runbook
 - external integration contracts for Spring Boot retrieval and future AstraIndexator ingestion
+- server installation, security, observability, troubleshooting and backup/restore documentation
 
 ## Architecture invariant
 
@@ -57,6 +58,7 @@ Read `deploy/local/README.md` before the first installation.
 
 - `docs/integration/SPRING_BOOT_RETRIEVAL_INTEGRATION.md` — retrieval HTTP/JSON contract and operational behavior.
 - `docs/integration/SPRING_BOOT_EXAMPLE_PROJECT.md` — reference Spring Boot adapter, DTO boundary, correlation and retry model.
+- `docs/integration/SPRING_BOOT_CONTRACT_TEST_GUIDE.md` — DTO serialization, access-zone, retry/error, fixture and real AstraDeployment contract tests.
 
 ### Future AstraIndexator ingestion
 
@@ -66,9 +68,16 @@ Read `deploy/local/README.md` before the first installation.
 
 ### Deployment and operations
 
-- `docs/operations/PLATFORM_DEPLOYMENT_GUIDE.md` — how to install AstraDeployment on a server and how the contract maps to future Kubernetes deployments.
-- `docs/operations/DEVOPS_LEARNING_AND_OPERATIONS_GUIDE.md` — practical Docker/Compose/health/persistence/troubleshooting concepts for developers operating the platform.
-- `deploy/local/recovery/README.md` — recovery modes and persistence guidance.
+Start here when installing or operating the platform:
+
+- `docs/operations/SERVER_INSTALLATION_RUNBOOK.md` — deterministic single-node Linux server installation and acceptance checklist.
+- `docs/operations/BACKUP_RESTORE_RUNBOOK.md` — PostgreSQL-first backup/recovery strategy, model-cache recovery and Qdrant rebuild/fast-restore modes.
+- `docs/operations/TROUBLESHOOTING_GUIDE.md` — infrastructure-to-application diagnostic order and evidence collection.
+- `docs/operations/SECURITY_BASELINE.md` — secrets, image supply chain, private networking, access-zone security and host/container hardening baseline.
+- `docs/operations/OBSERVABILITY_GUIDE.md` — health/readiness/smoke, logs, metrics, correlation IDs, dashboard and alerting model.
+- `docs/operations/PLATFORM_DEPLOYMENT_GUIDE.md` — general deployment architecture and future Kubernetes mapping.
+- `docs/operations/DEVOPS_LEARNING_AND_OPERATIONS_GUIDE.md` — practical Docker/Compose/health/persistence concepts for developers operating the platform.
+- `deploy/local/recovery/README.md` — local recovery modes and persistence guidance.
 
 ## External contract model
 
@@ -114,14 +123,15 @@ AstraDeployment 1.0
 ├── Qdrant
 ├── BGE-M3 model cache
 ├── Docker Compose operator bundle
-└── versioned integration documentation
+├── versioned integration documentation
+└── operational runbooks/security/observability baseline
 ```
 
 AstraIndexator, Kubernetes and Helm remain future milestones; their integration/deployment contracts are documented without claiming they are already implemented.
 
 ## Important contract gaps before AstraIndexator production implementation
 
-The current AstraVector API is sufficiently mature to design clients, but several cross-service details should be formally stabilized before multiple independent ingestion clients rely on them:
+The current AstraVector API is sufficiently mature to design clients, but several cross-service details are being formally stabilized in `llm2` before multiple independent ingestion clients rely on them:
 
 - byte-precise `batch_content_hash` canonicalization + golden vectors;
 - byte-precise `final_content_hash` canonicalization + golden vectors;
