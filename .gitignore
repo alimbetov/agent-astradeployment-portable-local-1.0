@@ -1,0 +1,4 @@
+deploy/local/.env
+deploy/local/.smoke/
+*.log
+.DS_Store
