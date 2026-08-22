@@ -2,9 +2,22 @@
 
 ## Purpose
 
-This document defines how a Spring Boot application integrates with AstraVector for retrieval. It is an integration contract, not an AstraVector implementation guide.
+This document defines how a Spring Boot application integrates with AstraVector retrieval. It is a consumer contract and onboarding guide, not an AstraVector implementation guide.
 
-AstraVector currently exposes both gRPC services and an internal HTTP retrieval boundary. For Spring Boot, the recommended first integration path is HTTP `POST /api/v1/retrieve` because it minimizes client coupling while preserving the retrieval contract.
+The canonical endpoint for Spring Boot integration is:
+
+```text
+POST /api/v1/retrieve
+```
+
+Use HTTP/JSON for Spring retrieval clients. Do not depend on internal Rust structs or AstraVector PostgreSQL/Qdrant schemas.
+
+For the full DTO field reference see:
+
+- `EXTERNAL_DTO_REFERENCE.md`
+- `ACCESS_ZONE_AND_TTL_SEMANTICS.md`
+- `SPRING_BOOT_EXAMPLE_PROJECT.md`
+- `CONTRACT_GOVERNANCE.md`
 
 ## Runtime endpoint
 
@@ -14,21 +27,27 @@ Local AstraDeployment default:
 http://127.0.0.1:8080/api/v1/retrieve
 ```
 
-Inside Docker Compose/Kubernetes service networking, use the AstraVector service DNS name instead of localhost, for example:
+Inside Docker Compose/Kubernetes service networking, use service DNS:
 
 ```text
 http://astravector:8080/api/v1/retrieve
 ```
 
+or:
+
+```text
+http://astravector.<namespace>.svc.cluster.local:8080/api/v1/retrieve
+```
+
 ## Request contract
 
-Example request:
+Example:
 
 ```json
 {
   "question": "Где AstraVector хранит каноническое состояние документов?",
-  "accessZoneId": "b4ec78f9-70c3-5264-8b75-1b85f1905e44",
-  "callerAccessLevel": "PUBLIC",
+  "accessZoneCodes": ["1500"],
+  "callerAccessLevel": "INTERNAL",
   "profile": "SEMANTIC",
   "maxContexts": 3,
   "enableGraphExpansion": false,
@@ -36,42 +55,155 @@ Example request:
 }
 ```
 
-Relevant fields:
+Current request surface includes:
 
-- `question` — user/search question.
-- `accessZoneId` / `accessZoneIds` — retrieval scope.
-- `accessZoneCode` / `accessZoneCodes` — optional code-based scope.
-- `callerAccessLevel` — visibility boundary such as `PUBLIC`, `INTERNAL`, `CONFIDENTIAL`, `RESTRICTED`.
-- `profile` — retrieval profile. For the currently validated dense-only smoke path use `SEMANTIC`.
-- `maxContexts` — maximum returned contexts.
-- `filters` — optional metadata filters.
-- `enableGraphExpansion` — optional graph expansion.
-- `correlationId` — tracing/correlation value from the calling application.
+```text
+question
+accessZoneId
+accessZoneIds
+accessZoneCode
+accessZoneCodes
+callerAccessLevel
+profile
+maxContexts
+filters
+enableGraphExpansion
+graphMaxHops
+graphMaxRelatedContexts
+correlationId
+```
+
+### Access-zone rules
+
+A request must contain at least one access-zone selector.
+
+AstraVector supports both UUID selectors and four-digit codes. Singular and plural forms are convenience representations of one/effective multiple zones.
+
+Recommended external policy:
+
+```text
+business-facing Spring API -> prefer accessZoneCodes
+internal/system integration -> UUIDs allowed
+```
+
+If ID-based and code-based selectors are sent together, AstraVector resolves both and expects them to describe the same effective zone set. A mismatch is rejected. Therefore do not routinely send both representations.
+
+See `ACCESS_ZONE_AND_TTL_SEMANTICS.md` for detailed rules.
+
+### callerAccessLevel
+
+Current values:
+
+```text
+PUBLIC
+INTERNAL
+CONFIDENTIAL
+RESTRICTED
+```
+
+This value is a retrieval visibility input. It is not authentication and must not be trusted directly from a browser/user request in production.
+
+Recommended flow:
+
+```text
+authenticated principal
+ -> Spring Security/gateway policy
+ -> effective callerAccessLevel
+ -> AstraVector
+```
+
+### Retrieval profiles
+
+Current public profiles include:
+
+```text
+BALANCED
+LEGAL
+TECHNICAL
+SEMANTIC
+LEXICAL_STRICT
+```
+
+For the validated dense-only path use `SEMANTIC`. Applications should not infer internal candidate counts/search branches from the profile name as a permanent business contract; server implementation can evolve while preserving profile semantics.
+
+### maxContexts
+
+`maxContexts=0`/absent uses server default behavior. Positive values are bounded by server configuration. The current deployment default maximum is not a permanent protocol invariant.
+
+### correlationId
+
+Recommended behavior:
+
+1. reuse incoming trusted correlation ID if present;
+2. otherwise generate a UUID;
+3. send the same value in `X-Correlation-Id` and body `correlationId`;
+4. log it on client failures.
 
 ## Response contract
 
-A successful response contains retrieved contexts and a summary. The integration should depend on the semantic contract, not on log output.
-
-Important response fields:
+Successful retrieval returns:
 
 ```text
-contexts[].matchedText
-contexts[].parentText
-contexts[].citation.documentId
-contexts[].citation.documentVersion
-contexts[].citation.sourceUri
-contexts[].scores.finalScore
-summary.returnedContexts
-summary.evidenceStatus
-summary.degraded
-summary.degradationCodes
+summary
+contexts[]
+warnings[]
+degradation
+diagnostics
 ```
 
-AstraVector is retrieval-only in this boundary. A Spring Boot service may pass the returned context to an LLM, but that is outside AstraVector.
+Important context fields include:
 
-## Recommended Spring Boot adapter
+```text
+matchedText
+parentText
+documentId
+documentVersion
+sourceBlockId
+matchedChunkId
+parentChunkId
+accessZoneId
+citation
+scores
+metadata
+```
 
-Use a dedicated client boundary:
+Important summary fields include:
+
+```text
+totalCandidates
+returnedContexts
+profile
+evidenceStatus
+degraded
+degradationCodes
+denseBranchExecuted
+sparseBranchExecuted
+fusionExecuted
+```
+
+### evidenceStatus
+
+```text
+FOUND        = evidence returned
+INSUFFICIENT = valid successful retrieval but evidence is insufficient/empty
+DEGRADED     = result produced under degraded retrieval conditions
+```
+
+`INSUFFICIENT` is not a transport/server failure. Do not map it to HTTP 500 in a calling Spring service.
+
+`DEGRADED` is also not automatically a transport failure. The caller may still use returned evidence with warnings according to business policy.
+
+### Forward compatibility
+
+Use Jackson models with unknown-field tolerance, for example:
+
+```java
+@JsonIgnoreProperties(ignoreUnknown = true)
+```
+
+Do not model `degradationCodes` as a closed enum without `UNKNOWN`, because the server may add new diagnostic codes.
+
+## Recommended Spring adapter boundary
 
 ```text
 Controller/Application Service
@@ -83,28 +215,28 @@ AstraVectorRetrievalClient
 HTTP /api/v1/retrieve
 ```
 
-Do not spread AstraVector JSON DTOs throughout business code. Map them into application-owned DTOs.
+Keep transport DTOs inside `infrastructure/astravector`. Map them into application-owned DTOs.
 
 Suggested package layout:
 
 ```text
 com.example.search
 ├── application
-│   └── RetrievalService.java
+│   ├── RetrievalService.java
+│   └── SearchResult.java
 ├── infrastructure
 │   └── astravector
 │       ├── AstraVectorClient.java
 │       ├── AstraVectorProperties.java
-│       ├── AstraVectorRetrieveRequest.java
-│       ├── AstraVectorRetrieveResponse.java
-│       └── AstraVectorClientException.java
+│       ├── AstraVectorClientException.java
+│       └── dto/...
 └── web
     └── SearchController.java
 ```
 
-## Configuration
+See `SPRING_BOOT_EXAMPLE_PROJECT.md` for a concrete implementation skeleton.
 
-Example `application.yml`:
+## Configuration
 
 ```yaml
 astravector:
@@ -113,61 +245,45 @@ astravector:
   read-timeout: 10s
 ```
 
-In Docker Compose:
+## Error model
 
-```text
-ASTRAVECTOR_BASE_URL=http://astravector:8080
-```
+AstraVector HTTP errors use a stable consumer shape similar to:
 
-In Kubernetes:
-
-```text
-ASTRAVECTOR_BASE_URL=http://astravector.<namespace>.svc.cluster.local:8080
-```
-
-## Client behavior
-
-The Spring client should:
-
-1. create a correlation ID if one is not already present;
-2. set a bounded connect/read timeout;
-3. distinguish 4xx contract errors from 5xx/dependency errors;
-4. never retry validation/authorization failures;
-5. use limited retry only for safe transient connection/5xx failures;
-6. propagate `evidenceStatus`, `degraded` and `degradationCodes` to the application layer;
-7. not treat an empty context list as a transport failure;
-8. log correlation IDs but not sensitive document content by default.
-
-## WebClient skeleton
-
-```java
-@ConfigurationProperties(prefix = "astravector")
-public record AstraVectorProperties(
-        URI baseUrl,
-        Duration connectTimeout,
-        Duration readTimeout
-) {}
-```
-
-```java
-@Component
-@RequiredArgsConstructor
-public class AstraVectorClient {
-
-    private final WebClient webClient;
-
-    public Mono<AstraVectorRetrieveResponse> retrieve(AstraVectorRetrieveRequest request) {
-        return webClient.post()
-                .uri("/api/v1/retrieve")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(request)
-                .retrieve()
-                .bodyToMono(AstraVectorRetrieveResponse.class);
-    }
+```json
+{
+  "code": "INVALID_ARGUMENT",
+  "message": "question is required",
+  "correlationId": "..."
 }
 ```
 
-For a synchronous Spring MVC application, the adapter may use `RestClient` instead. The important point is preserving the same DTO and failure contract.
+Typical handling:
+
+```text
+400 -> permanent request/contract error
+401/403 -> security/configuration problem
+404 -> missing resource/scope
+409 -> state conflict/reconciliation
+429 -> bounded retry only when transient capacity pressure
+503 -> bounded retry
+504 -> bounded retry inside latency budget
+500 -> server failure
+```
+
+Never blindly retry validation/security errors.
+
+## Retry policy
+
+Retrieval is semantically read-only, so bounded retry is acceptable for transient failures.
+
+Recommended policy:
+
+- connect failure -> retry with backoff;
+- 503/504 -> retry with backoff;
+- 429 -> retry only with bounded policy;
+- 400/401/403 -> no retry;
+- `INSUFFICIENT` -> no transport retry;
+- `DEGRADED` -> application decision, not automatic transport retry.
 
 ## Health integration
 
@@ -178,22 +294,37 @@ GET /health
 GET /ready
 ```
 
-Spring Boot should use `/ready` for dependency-readiness diagnostics. Do not make every business request perform a readiness call first.
+Use `/ready` for dependency diagnostics/readiness. Do not make every business request call readiness first.
 
 ## Security
 
-The current AstraDeployment local profile is internal/local and authentication may be disabled. Customer environments should place AstraVector on an internal network and define gateway/API-key/mTLS policy separately.
+The local profile is internal and may run without HTTP authentication. Customer production environments should provide transport security/authentication through gateway/mTLS/API policy as appropriate.
 
-Do not infer authorization from `callerAccessLevel`; it is a retrieval visibility input, not a substitute for transport authentication.
+Never confuse:
 
-## Acceptance test
+```text
+transport identity/authentication
+```
 
-A Spring Boot integration is accepted when:
+with:
 
-1. AstraDeployment is healthy;
-2. a known document has been indexed and activated;
-3. Spring Boot sends a real retrieval request;
-4. `summary.evidenceStatus` is `FOUND` for the known test question;
-5. at least one returned context contains the expected evidence;
-6. correlation ID is visible end-to-end;
-7. timeout/error handling is demonstrated for unavailable AstraVector.
+```text
+callerAccessLevel + access zones
+```
+
+The latter define retrieval visibility/scope, not caller identity.
+
+## Minimum acceptance tests
+
+A Spring integration should prove:
+
+1. known document retrieval returns `FOUND`;
+2. one access-zone code works;
+3. multiple access-zone codes work;
+4. missing zone is rejected;
+5. mismatched code+ID is rejected;
+6. `INSUFFICIENT` is handled as semantic success;
+7. `DEGRADED` metadata reaches application layer;
+8. unavailable AstraVector triggers bounded dependency handling;
+9. correlation ID is propagated;
+10. unknown response fields do not break deserialization.
