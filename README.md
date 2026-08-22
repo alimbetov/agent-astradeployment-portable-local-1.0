@@ -38,4 +38,33 @@ docker login registry.astrabase.asia -u astra-reader
 
 Read `deploy/local/README.md` before the first installation.
 
-The system architecture and acceptance contract are defined in `docs/ASTRADEPLOYMENT_PORTABLE_LOCAL_1_0_SPEC.md`.
+## Documentation map
+
+### Architecture and validation
+
+- `docs/ASTRADEPLOYMENT_PORTABLE_LOCAL_1_0_SPEC.md` — architecture and acceptance contract.
+- `docs/ASTRADEPLOYMENT_PORTABLE_LOCAL_1_0_VALIDATION_RESULT.md` — validated deployment evidence.
+
+### Integration contracts
+
+- `docs/integration/SPRING_BOOT_RETRIEVAL_INTEGRATION.md` — recommended Spring Boot integration with AstraVector retrieval.
+- `docs/integration/ASTRAINDEXATOR_INTEGRATION_CONTRACT.md` — future AstraIndexator → AstraVector ingestion boundary.
+
+### Deployment and operations
+
+- `docs/operations/PLATFORM_DEPLOYMENT_GUIDE.md` — how to install AstraDeployment on a server and how the contract maps to future Kubernetes deployments.
+- `docs/operations/DEVOPS_LEARNING_AND_OPERATIONS_GUIDE.md` — practical Docker/Compose/health/persistence/troubleshooting concepts for developers operating the platform.
+- `deploy/local/recovery/README.md` — recovery modes and persistence guidance.
+
+## Current scope
+
+```text
+AstraDeployment 1.0
+├── AstraVector
+├── PostgreSQL + pgvector
+├── Qdrant
+├── BGE-M3 model cache
+└── Docker Compose operator bundle
+```
+
+AstraIndexator, Kubernetes and Helm remain future milestones; their integration/deployment contracts are documented without claiming they are already implemented.
