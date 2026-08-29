@@ -109,13 +109,13 @@ The PostgreSQL port is not published by default. Qdrant may be bound to `127.0.0
 ### AstraVector
 
 ```text
-registry.astrabase.asia/astravector:sha-1cb6065
+registry.astrabase.asia/astravector:sha-f6493fa
 ```
 
 Recorded tested digest:
 
 ```text
-sha256:b0567810b5ea3df752ff8ba559fcf16bc46b245878e798b8888dcf93426ee6ad
+sha256:2957a8887443e53914ca07816ddbaab385e02b96a81b7a08b4a1697f94f0ac40
 ```
 
 The currently proven image is `linux/arm64`. AstraDeployment MUST NOT claim Linux amd64 compatibility until a matching amd64/multi-arch AstraVector image is published and validated. `ASTRAVECTOR_IMAGE` and `ASTRAVECTOR_EXPECTED_DIGEST` remain configurable to support future releases.

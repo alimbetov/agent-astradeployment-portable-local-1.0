@@ -2,6 +2,15 @@
 
 This directory is the operator bundle for a reproducible single-node AstraVector deployment.
 
+## Current AstraVector image
+
+```text
+ASTRAVECTOR_IMAGE=registry.astrabase.asia/astravector:sha-f6493fa
+ASTRAVECTOR_EXPECTED_DIGEST=sha256:2957a8887443e53914ca07816ddbaab385e02b96a81b7a08b4a1697f94f0ac40
+```
+
+The moving registry tag `registry.astrabase.asia/astravector:0.4.1-image-contract` currently points to the same digest. Prefer the immutable `sha-f6493fa` tag in `.env` for reproducible local deployments.
+
 ## Included
 
 - `postgres` — `pgvector/pgvector:pg16`
@@ -36,6 +45,8 @@ ASTRAVECTOR_NEXUS_PASSWORD=<reader secret>
 ```
 
 Do not commit `.env`.
+
+`ASTRAVECTOR_DB_URL` is the connection string AstraVector uses to create and migrate its own PostgreSQL schema. `ASTRAVECTOR_QDRANT_URL` and `ASTRAVECTOR_QDRANT_COLLECTION` tell AstraVector where to maintain the rebuildable Qdrant projection. PostgreSQL and Qdrant images do not need AstraVector-specific custom builds for this local bundle; Compose creates the database user/password from `.env`, and AstraVector applies its own application schema/migration behavior at startup.
 
 Authenticate Docker separately:
 

@@ -39,7 +39,7 @@ services:
       - astra
 
   astravector:
-    image: ${ASTRAVECTOR_IMAGE:-registry.astrabase.asia/astravector:sha-1cb6065}
+    image: ${ASTRAVECTOR_IMAGE:-registry.astrabase.asia/astravector:sha-f6493fa}
     restart: unless-stopped
     stop_grace_period: ${ASTRAVECTOR_STOP_GRACE_PERIOD:-90s}
     depends_on:

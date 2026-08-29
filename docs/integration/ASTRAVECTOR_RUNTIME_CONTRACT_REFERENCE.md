@@ -169,6 +169,56 @@ The model cache is expected at:
 /models/bge-m3
 ```
 
+In the portable local deployment these values are provided by `deploy/local/.env` and injected by Docker Compose. The AstraVector OCI image does not store deployment passwords, PostgreSQL connection strings, Qdrant endpoints or machine-specific model-cache state.
+
+The important local fields are:
+
+```text
+POSTGRES_DB
+POSTGRES_USER
+POSTGRES_PASSWORD
+ASTRAVECTOR_DB_URL
+ASTRAVECTOR_QDRANT_URL
+ASTRAVECTOR_QDRANT_COLLECTION
+ASTRAVECTOR_NEXUS_USERNAME
+ASTRAVECTOR_NEXUS_PASSWORD
+ASTRAVECTOR_MODEL_*_SHA256
+```
+
+PostgreSQL must provide the configured database and role. AstraVector owns its application-level schema and migrations inside that database. Qdrant must be reachable; AstraVector owns collection compatibility checks, auto-create behavior and payload index management according to its runtime configuration.
+
+## AstraIndexator handoff summary
+
+AstraIndexator passes parsed logical content to AstraVector. It must not bypass AstraVector by writing rows into PostgreSQL or points into Qdrant.
+
+Recommended minimum lifecycle:
+
+```text
+ParsedDocument
+  -> LogicalBlock[]
+  -> AstraVectorIngestionFacade/IndexLogicalDocument
+  -> GetDocumentVectorStatus
+  -> AstraVectorV004Control/ActivateDocumentVersion
+  -> retrieval proof through POST /api/v1/retrieve
+```
+
+AstraIndexator is responsible for:
+
+- acquiring the source file/object/URL;
+- parsing and OCR;
+- building stable document identity and metadata;
+- selecting the access zone provided by the platform boundary;
+- preserving idempotency/session metadata for retries.
+
+AstraVector is responsible for:
+
+- tokenizer-aware chunking;
+- embedding generation;
+- canonical PostgreSQL persistence;
+- Qdrant projection creation/rebuild;
+- activation/searchability state;
+- retrieval evidence.
+
 Required model files:
 
 ```text

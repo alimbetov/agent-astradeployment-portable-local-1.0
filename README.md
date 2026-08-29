@@ -147,10 +147,10 @@ AstraIndexator, Kubernetes and Helm remain future milestones; their integration/
 
 ```text
 AstraVector image:
-registry.astrabase.asia/astravector:sha-1cb6065
+registry.astrabase.asia/astravector:sha-f6493fa
 
 Digest:
-sha256:b0567810b5ea3df752ff8ba559fcf16bc46b245878e798b8888dcf93426ee6ad
+sha256:2957a8887443e53914ca07816ddbaab385e02b96a81b7a08b4a1697f94f0ac40
 
 Validated architecture:
 linux/arm64
@@ -181,6 +181,21 @@ AstraVector ingestion is usable for client design, while FIX493 in `llm2` is int
 - typed ingestion error reasons.
 
 AstraIndexator may be developed against the documented architecture now, but production code for those four details should follow the final AstraVector contract rather than duplicating internal Rust behavior.
+
+## AstraIndexator to AstraVector handoff
+
+AstraIndexator does not write to AstraVector PostgreSQL or Qdrant directly. It passes already parsed logical document data to AstraVector over gRPC, then observes publication state before declaring the document searchable.
+
+The minimum smoke-proven sequence is:
+
+```text
+IndexLogicalDocument
+-> GetDocumentVectorStatus
+-> ActivateDocumentVersion
+-> POST /api/v1/retrieve
+```
+
+AstraIndexator supplies document identity, access-zone metadata, source metadata and ordered logical blocks. AstraVector owns tokenizer-aware chunking, BGE-M3 inference, PostgreSQL canonical persistence, Qdrant projection and retrieval ranking.
 
 ## Change control
 

@@ -37,13 +37,13 @@ Model data = immutable runtime artifact cached locally
 AstraVector image:
 
 ```text
-registry.astrabase.asia/astravector:sha-1cb6065
+registry.astrabase.asia/astravector:sha-f6493fa
 ```
 
 Validated digest:
 
 ```text
-sha256:b0567810b5ea3df752ff8ba559fcf16bc46b245878e798b8888dcf93426ee6ad
+sha256:2957a8887443e53914ca07816ddbaab385e02b96a81b7a08b4a1697f94f0ac40
 ```
 
 Validated platform:
